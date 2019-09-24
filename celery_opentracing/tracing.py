@@ -82,10 +82,10 @@ class CeleryTracing(celery.app.base.Celery):
         if headers is not None:
             self._set_span_tags(span, headers)
             if self._propagate:
+                span.set_tag(ext_tags.SPAN_KIND, ext_tags.SPAN_KIND_PRODUCER)
                 headers[context_headers] = {}
                 self._tracer.inject(span.context, opentracing.Format.TEXT_MAP,
                                     headers[context_headers])
-
         if not hasattr(task, spans_attr):
             setattr(task, spans_attr, {})
         getattr(task, spans_attr)['publish:{}'.format(task_id)] = span
@@ -97,6 +97,9 @@ class CeleryTracing(celery.app.base.Celery):
 
         task_id = kwargs.get('headers', {}).get('id') or kwargs.get('body', {}).get('id')
         span = self._get_span(task, 'publish:{}'.format(task_id), remove=True)
+
+        self._set_span_tags(span, kwargs)
+
         active_scope = self._tracer.scope_manager.active
         if active_scope.span is span:
             active_scope.close()
@@ -116,6 +119,9 @@ class CeleryTracing(celery.app.base.Celery):
 
         span = self._tracer.start_active_span(task.name, child_of=parent, ignore_active_span=True,
                                               tags=copy(self._span_tags)).span
+
+        if self._propagate:
+            span.set_tag(ext_tags.SPAN_KIND, ext_tags.SPAN_KIND_CONSUMER)
 
         request = task.request
         task_id = kwargs.get('task_id', request.correlation_id)
@@ -204,24 +210,27 @@ class CeleryTracing(celery.app.base.Celery):
     @staticmethod
     def _set_span_tags(span, headers):
         span.set_tag(ext_tags.COMPONENT, 'celery')
-        tags = ('countdown', 'delivery_info', 'eta', 'expires', 'group', 'hostname', 'origin', 'retries', 'timelimit')
-        for tag in tags:
+        state_tags = ('countdown', 'eta',  'expires', 'group', 'hostname', 'origin',
+                      'retries',  'timelimit')
+        for tag in state_tags:
             val = headers.get(tag)
             if val not in (None, '', [None, None], (None, None)):
-                if tag == 'delivery_info':
-                    for subtag in ('exchange', 'priority', 'redelivered', 'routing_key', 'queue'):
-                        subval = val.get(subtag)
-                        if subval not in (None, ''):
-                            span.set_tag('celery.delivery.{}'.format(subtag), subval)
-
-                            # delivery_info not always populated so we overwrite OT tag
-                            # with more detail when possible, with preference at queue level
-                            if subtag in ('exchange', 'routing_key', 'queue'):
-                                span.set_tag(ext_tags.MESSAGE_BUS_DESTINATION, subval)
-                    continue
 
                 if tag == 'hostname':
                     tag = 'worker.hostname'
                 if tag == 'origin':
                     tag = 'task.origin'
                 span.set_tag('celery.{}'.format(tag), val)
+
+        delivery_info = headers.get('delivery_info')
+        if delivery_info is not None:
+            headers = delivery_info
+
+        # If exchange and queue are not set, default exchange in use so routing key is queue name
+        for tag in ('routing_key', 'exchange', 'queue', 'priority', 'redelivered'):
+            val = headers.get(tag)
+            if val not in (None, ''):
+                span.set_tag('celery.delivery.{}'.format(tag), val)
+
+                if tag in ('exchange', 'queue', 'routing_key'):
+                    span.set_tag(ext_tags.MESSAGE_BUS_DESTINATION, val)

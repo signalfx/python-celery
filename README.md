@@ -26,8 +26,8 @@ The provided `celery.app.base.Celery` subclass allows the tracing of task schedu
 from celery_opentracing import CeleryTracing
 
 opentracing_tracer = # some OpenTracing tracer implementation
-traced_app = CeleryTracing(tracer=opentracing_tracer, propagate=True,  # propagation allows distributed over broker
-                           span_tags=dict(my_helpful='tag'))           # two distributed workers.
+traced_app = CeleryTracing(tracer=opentracing_tracer, propagate=True,  # propagation allows distributed tracing from
+                           span_tags=dict(my_helpful='tag'))           # publisher over broker to workers.
 
 @traced_app.task(bind=True)
 def my_task(self):

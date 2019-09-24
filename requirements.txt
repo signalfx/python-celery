@@ -1,2 +1,2 @@
-opentracing
+opentracing>=2.0
 six>=1.12.0

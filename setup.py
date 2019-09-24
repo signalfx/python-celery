@@ -39,6 +39,7 @@ setup(
     author_email='info@signalfx.com',
     description='OpenTracing support for Celery',
     long_description=long_description,
+    long_description_content_type="text/markdown",
     packages=find_packages(),
     platforms='any',
     license='Apache Software License v2',

@@ -4,6 +4,7 @@ import logging
 
 from celery import signals, Celery, __version__
 from opentracing.mocktracer import MockTracer
+import opentracing.ext.tags as ext_tags
 from opentracing import Tracer
 import celery.exceptions
 import pytest
@@ -11,9 +12,6 @@ import pytest
 from celery_opentracing import CeleryTracing
 
 logging.basicConfig(level='DEBUG')
-
-broker = 'amqp://guest@localhost/'
-backend = 'rpc://guest@localhost:5672/'
 
 version_31 = __version__[0:3] == '3.1'
 
@@ -101,27 +99,34 @@ class TestTracedCelery(object):
         assert parent.operation_name == 'publish test_traced_celery.add'
         assert parent.parent_id is None
         assert parent.tags.pop('celery.task.origin', version_31)
+        if version_31:
+            assert parent.tags.pop('celery.delivery.exchange') == 'celery'
         assert parent.tags == {
-            'component': 'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_PRODUCER,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
             'celery.task.id': r.id,
-            'celery.retries': 0
+            'message_bus.destination': 'celery'
         }
 
         assert child.operation_name == 'test_traced_celery.add'
         assert child.parent_id == parent.context.span_id
         assert child.tags.pop('celery.worker.hostname', False)
         assert child.tags.pop('celery.task.origin', version_31)
-        assert child.tags.pop('celery.delivery.exchange', not version_31)
+        if version_31:
+            assert child.tags.pop('celery.delivery.exchange') == 'celery'
         assert child.tags == {
-            'component': 'celery',
-            'celery.task.id': r.id,
-            'celery.retries': 0,
-            'one': 1,
-            'two': 2,
-            'celery.delivery.redelivered': False,
-            'celery.delivery.routing_key': u'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.priority': 0,
-            'message_bus.destination': u'celery'
+            'celery.delivery.redelivered': False,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
+            'celery.task.id': r.id,
+            'message_bus.destination': 'celery',
+            'one': 1,
+            'two': 2
         }
 
     def test_basic_propagation_with_countdown(self, tasks, tracer):
@@ -136,10 +141,15 @@ class TestTracedCelery(object):
         assert parent.parent_id is None
         assert parent.tags.pop('celery.eta', version_31)
         assert parent.tags.pop('celery.task.origin', version_31)
+        if version_31:
+            assert parent.tags.pop('celery.delivery.exchange') == 'celery'
         assert parent.tags == {
-            'component': 'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_PRODUCER,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
             'celery.task.id': r.id,
-            'celery.retries': 0
+            'message_bus.destination': 'celery'
         }
 
         assert child.operation_name == 'test_traced_celery.add'
@@ -147,17 +157,19 @@ class TestTracedCelery(object):
         assert child.tags.pop('celery.eta', False)
         assert child.tags.pop('celery.worker.hostname', False)
         assert child.tags.pop('celery.task.origin', version_31)
-        assert child.tags.pop('celery.delivery.exchange', not version_31)
+        if version_31:
+            assert child.tags.pop('celery.delivery.exchange') == 'celery'
         assert child.tags == {
-            'component': 'celery',
-            'celery.task.id': r.id,
-            'celery.retries': 0,
-            'one': 2,
-            'two': 3,
-            'celery.delivery.redelivered': False,
-            'celery.delivery.routing_key': u'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.priority': 0,
-            'message_bus.destination': u'celery'
+            'celery.delivery.redelivered': False,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
+            'celery.task.id': r.id,
+            'message_bus.destination': 'celery',
+            'one': 2,
+            'two': 3
         }
 
     def test_propagation_with_exception_in_task(self, tasks, tracer):
@@ -174,26 +186,33 @@ class TestTracedCelery(object):
         assert parent.operation_name == 'publish test_traced_celery.blowup'
         assert parent.parent_id is None
         assert parent.tags.pop('celery.task.origin', version_31)
+        if version_31:
+            assert parent.tags.pop('celery.delivery.exchange') == 'celery'
         assert parent.tags == {
-            'component': 'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_PRODUCER,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
             'celery.task.id': r.id,
-            'celery.retries': 0
+            'message_bus.destination': 'celery'
         }
 
         assert child.operation_name == 'test_traced_celery.blowup'
         assert child.parent_id == parent.context.span_id
         assert child.tags.pop('celery.worker.hostname', False)
         assert child.tags.pop('celery.task.origin', version_31)
-        assert child.tags.pop('celery.delivery.exchange', not version_31)
+        if version_31:
+            assert child.tags.pop('celery.delivery.exchange') == 'celery'
         assert child.tags == {
-            'component': 'celery',
-            'celery.task.id': r.id,
-            'celery.retries': 0,
-            'error': True,
-            'celery.delivery.redelivered': False,
-            'celery.delivery.routing_key': u'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.priority': 0,
-            'message_bus.destination': u'celery'
+            'celery.delivery.redelivered': False,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
+            'celery.task.id': r.id,
+            'error': True,
+            'message_bus.destination': 'celery'
         }
         logs = child.logs[0].key_values
         assert logs['error.kind'] == 'ZeroDivisionError'
@@ -223,10 +242,15 @@ class TestTracedCelery(object):
         assert parent.operation_name == 'publish test_traced_celery.retry'
         assert parent.parent_id is None
         assert parent.tags.pop('celery.task.origin', version_31)
+        if version_31:
+            assert parent.tags.pop('celery.delivery.exchange') == 'celery'
         assert parent.tags == {
-            'component': 'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_PRODUCER,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
             'celery.task.id': r.id,
-            'celery.retries': 0
+            'message_bus.destination': 'celery'
         }
 
         assert first_run.operation_name == 'test_traced_celery.retry'
@@ -234,16 +258,18 @@ class TestTracedCelery(object):
         assert first_run.tags.pop('celery.retry.reason', False)
         assert first_run.tags.pop('celery.worker.hostname', False)
         assert first_run.tags.pop('celery.task.origin', version_31)
-        assert first_run.tags.pop('celery.delivery.exchange', not version_31)
+        if version_31:
+            assert first_run.tags.pop('celery.delivery.exchange') == 'celery'
         assert first_run.tags == {
-            'component': 'celery',
-            'celery.task.id': r.id,
-            'celery.retry': True,
-            'celery.retries': 0,
-            'celery.delivery.redelivered': False,
-            'celery.delivery.routing_key': u'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.priority': 0,
-            'message_bus.destination': u'celery'
+            'celery.delivery.redelivered': False,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 0,
+            'celery.retry': True,
+            'celery.task.id': r.id,
+            'message_bus.destination': 'celery'
         }
         logs = first_run.logs[0].key_values
         assert logs['error.kind'] == 'Retry'
@@ -258,15 +284,17 @@ class TestTracedCelery(object):
         assert retry_parent.tags.pop('celery.eta', False)
         assert retry_parent.tags.pop('celery.worker.hostname', False)
         assert retry_parent.tags.pop('celery.task.origin', version_31)
-        assert retry_parent.tags.pop('celery.delivery.exchange', not version_31)
+        if version_31:
+            assert retry_parent.tags.pop('celery.delivery.exchange') == 'celery'
         assert retry_parent.tags == {
-            'component': 'celery',
-            'celery.task.id': r.id,
-            'celery.retries': 1,
-            'celery.delivery.redelivered': False,
-            'celery.delivery.routing_key': u'celery',
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_PRODUCER,
             'celery.delivery.priority': 0,
-            'message_bus.destination': u'celery'
+            'celery.delivery.redelivered': False,
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 1,
+            'celery.task.id': r.id,
+            'message_bus.destination': 'celery'
         }
 
         assert final_run.operation_name == 'test_traced_celery.retry'
@@ -274,14 +302,15 @@ class TestTracedCelery(object):
         assert final_run.tags.pop('celery.eta', False)
         assert final_run.tags.pop('celery.worker.hostname', False)
         assert final_run.tags.pop('celery.task.origin', version_31)
-        assert final_run.tags.pop('celery.delivery.exchange', not version_31)
         if version_31:
             assert final_run.tags.pop('celery.delivery.priority') == 0
+            assert final_run.tags.pop('celery.delivery.exchange') == 'celery'
         assert final_run.tags == {
-            'component': 'celery',
-            'celery.task.id': r.id,
-            'celery.retries': 1,
+            ext_tags.COMPONENT: 'celery',
+            ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.redelivered': False,
-            'celery.delivery.routing_key': u'celery',
-            'message_bus.destination': u'celery'
+            'celery.delivery.routing_key': 'celery',
+            'celery.retries': 1,
+            'celery.task.id': r.id,
+            'message_bus.destination': 'celery'
         }
