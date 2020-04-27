@@ -203,7 +203,7 @@ class TestTracedCelery(object):
         assert child.tags.pop('celery.task.origin', version_31)
         if version_31:
             assert child.tags.pop('celery.delivery.exchange') == 'celery'
-        assert child.tags == {
+        tags = {
             ext_tags.COMPONENT: 'celery',
             ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.priority': 0,
@@ -212,14 +212,17 @@ class TestTracedCelery(object):
             'celery.retries': 0,
             'celery.task.id': r.id,
             'error': True,
-            'message_bus.destination': 'celery'
+            'message_bus.destination': 'celery',
         }
-        logs = child.logs[0].key_values
-        assert logs['error.kind'] == 'ZeroDivisionError'
-        assert isinstance(logs['error.object'], ZeroDivisionError)
-        assert logs['event'] == 'error'
-        assert 'by zero' in logs['message']
-        assert logs.pop('stack', False)
+
+        for k, v in tags.items():
+            assert k in child.tags
+            assert child.tags[k] == v
+
+        assert child.tags['sfx.error.kind'] == 'ZeroDivisionError'
+        assert isinstance(child.tags['sfx.error.object'], ZeroDivisionError)
+        assert 'by zero' in child.tags['sfx.error.message']
+        assert 'sfx.error.stack' in child.tags
 
     def test_propagation_with_retry_and_exception_in_task(self, tasks, tracer):
         r = tasks.retry.delay()
@@ -260,7 +263,7 @@ class TestTracedCelery(object):
         assert first_run.tags.pop('celery.task.origin', version_31)
         if version_31:
             assert first_run.tags.pop('celery.delivery.exchange') == 'celery'
-        assert first_run.tags == {
+        tags = {
             ext_tags.COMPONENT: 'celery',
             ext_tags.SPAN_KIND: ext_tags.SPAN_KIND_CONSUMER,
             'celery.delivery.priority': 0,
@@ -269,14 +272,17 @@ class TestTracedCelery(object):
             'celery.retries': 0,
             'celery.retry': True,
             'celery.task.id': r.id,
-            'message_bus.destination': 'celery'
+            'message_bus.destination': 'celery',
+            'error': True,
+            'sfx.error.kind': 'Retry',
         }
-        logs = first_run.logs[0].key_values
-        assert logs['error.kind'] == 'Retry'
-        assert isinstance(logs['error.object'], celery.exceptions.Retry)
-        assert logs['event'] == 'error'
-        assert "Retry in 0.5s: Exception('My Exception!'" in logs['message']
-        assert logs.pop('stack', False)
+        for k, v in tags.items():
+            assert k in first_run.tags
+            assert first_run.tags[k] == v
+
+        assert isinstance(first_run.tags['sfx.error.object'], celery.exceptions.Retry)
+        assert "Retry in 0.5s: Exception('My Exception!'" in first_run.tags['sfx.error.message']
+        assert 'sfx.error.stack' in first_run.tags
 
         assert retry_parent.context.trace_id == first_run.context.trace_id
         assert retry_parent.operation_name == 'publish test_traced_celery.retry'
