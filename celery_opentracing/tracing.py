@@ -147,20 +147,19 @@ class CeleryTracing(celery.app.base.Celery):
         if exc is None and einfo is not None:
             exc = einfo.exception
 
-        logged_error = {'event': ext_tags.ERROR}
         if exc is not None:
-            logged_error.update({'message': str(exc),
-                                 'error.object': exc,
-                                 'error.kind': exc.__class__.__name__})
-
+            span.set_tag('sfx.error.message', str(exc))
+            span.set_tag('sfx.error.object', exc)
+            span.set_tag('sfx.error.kind', exc.__class__.__name__)
             tb = kwargs.get('traceback')
             if tb is None:
                 if einfo is not None:
                     tb = einfo.traceback
             if tb is not None:
-                logged_error['stack'] = text_type('').join(traceback.format_tb(tb))
-
-        span.log_kv(logged_error)
+                span.set_tag(
+                    'sfx.error.stack',
+                    text_type('').join(traceback.format_tb(tb)),
+                )
 
     def _tag_retry(self, *args, **kwargs):
         task = kwargs.get('sender')
@@ -173,18 +172,16 @@ class CeleryTracing(celery.app.base.Celery):
         einfo = kwargs.get('einfo')
         if einfo is not None:
             exc = einfo.exception
-            logged_error = {'event': ext_tags.ERROR}
-            logged_error.update({'message': str(exc),
-                                 'error.object': exc,
-                                 'error.kind': exc.__class__.__name__})
+            span.set_tag('error', True)
+            span.set_tag('sfx.error.message', str(exc))
+            span.set_tag('sfx.error.object', exc)
+            span.set_tag('sfx.error.kind', exc.__class__.__name__)
 
             tb = einfo.traceback
             if tb is not None:
                 if isinstance(tb, list):
                     tb = text_type('').join(traceback.format_tb(tb))
-                logged_error['stack'] = tb
-
-            span.log_kv(logged_error)
+                span.set_tag('sfx.error.stack', tb)
 
     def _finish_span(self, *args, **kwargs):
         task = kwargs.get('sender')
