@@ -31,8 +31,8 @@ test_requirements = ['mock', 'pytest']
 integration_test_requirements = ['docker']
 
 setup(
-    name='Celery-OpenTracing',
-    version='0.0.1post0',
+    name='signalfx-instrumentation-celery',
+    version='1.0.0',
     url='http://github.com/signalfx/python-celery',
     download_url='http://github.com/signalfx/python-celery/tarball/master',
     author='SignalFx, Inc.',

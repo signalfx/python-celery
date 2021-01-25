@@ -11,7 +11,7 @@ If you want to learn more about the underlying Python API, visit the Python [sou
 Run the following command:
 
 ```
-$ pip install celery-opentracing
+$ pip install signalfx-instrumentationn-celery
 ```
 
 ## Usage
